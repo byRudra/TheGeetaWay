@@ -14,7 +14,10 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 import os
 import sys
+import logging
 from functools import lru_cache
+
+logger = logging.getLogger(__name__)
 
 # ========================================================================
 # PATH SETUP
@@ -260,7 +263,20 @@ async def search(request: QueryRequest, background_tasks: BackgroundTasks):
 
     guidance = None
     if request.include_guidance:
-        text = reason_over_verses(request.question, results)
+        try:
+            text = reason_over_verses(request.question, results)
+        except Exception:
+            logger.exception("Guidance generation failed")
+            text = None
+
+        # A guidance failure must never take down the whole response - the
+        # retrieved verses are still useful on their own.
+        if not isinstance(text, str) or not text.strip():
+            text = (
+                "\U0001f30c Guidance is temporarily unavailable, but the verses "
+                "above still speak to your question. Please try again shortly."
+            )
+
         guidance = GuidanceResponse(
             guidance_text=text,
             selected_verse={
