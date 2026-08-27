@@ -5,9 +5,20 @@ Converted from Jupyter notebook for use in Streamlit app
 
 import json
 import os
+
+# torch sizes its thread pool from the host's CPU count, not the container's
+# cgroup quota. Inside Railway's CPU limit that oversubscription made a single
+# MiniLM encode take ~22s instead of ~20ms. These must be set before torch is
+# imported (directly or via sentence_transformers) for OpenMP to honour them.
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
+
 import faiss
 import numpy as np
+import torch
 from sentence_transformers import SentenceTransformer
+
+torch.set_num_threads(1)
 
 # ========================================================================
 # CONFIGURATION

@@ -41,6 +41,11 @@ st.set_page_config(
 # HELPERS
 # ========================================================================
 
+# A cold Railway container has to warm the embedding model before it can answer,
+# so the first search after an idle period is far slower than a warm one.
+API_TIMEOUT = 120
+
+
 def call_api(endpoint: str, method: str = "GET", data: dict = None):
     headers = {
         "X-API-Key": API_KEY,
@@ -53,13 +58,13 @@ def call_api(endpoint: str, method: str = "GET", data: dict = None):
                 f"{API_BASE_URL}{endpoint}",
                 json=data,
                 headers=headers,
-                timeout=30
+                timeout=API_TIMEOUT
             )
         else:
             res = requests.get(
                 f"{API_BASE_URL}{endpoint}",
                 headers=headers,
-                timeout=30
+                timeout=API_TIMEOUT
             )
 
         res.raise_for_status()
