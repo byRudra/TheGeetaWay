@@ -9,6 +9,10 @@ import hashlib
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
+# Groq retires models periodically - keep this overridable without a code change.
+# Current list: https://console.groq.com/docs/models
+GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
+
 # ========================================================================
 # HELPER FUNCTIONS
 # ========================================================================
@@ -151,7 +155,7 @@ def rank_verses_by_suitability(verses: list, user_problem: str) -> list:
 
 def reason_over_verses(user_problem: str, retrieved_verses: list) -> str:
     """
-    Generate spiritual guidance using Groq's Llama 3.3 70B model
+    Generate spiritual guidance using a Groq-hosted LLM (see GROQ_MODEL)
     
     Args:
         user_problem: User's question or situation
@@ -296,21 +300,38 @@ Chapter {v['chapter']}, Verse {v['verse']} | Suitability: {v.get('suitability_sc
                     "content": user_prompt
                 }
             ],
-            model="llama-3.3-70b-versatile",
+            model=GROQ_MODEL,
             temperature=0.68,      # Balanced between creativity and consistency
-            max_tokens=500,        # Enough for detailed guidance
-            top_p=0.92,           # Nucleus sampling for quality
-            frequency_penalty=0.1, # Slight penalty for repetition
-            presence_penalty=0.1   # Encourage diverse vocabulary
+            max_tokens=1500,       # Headroom: reasoning models spend tokens before answering
+            top_p=0.92,            # Nucleus sampling for quality
+            extra_body={"reasoning_effort": "low"},
         )
-        
-        return chat_completion.choices[0].message.content
-        
+
+        content = (chat_completion.choices[0].message.content or "").strip()
+
+        if not content:
+            return "🌌 The guidance came back empty. Please try rephrasing your question."
+
+        return content
+
     except Exception as e:
         error_msg = str(e)
-        
-        # Provide specific error guidance
-        if "api_key" in error_msg.lower():
+        lowered = error_msg.lower()
+
+        # Provide specific error guidance - always return a string, never None,
+        # because the API layer requires guidance_text to be present.
+        if "api_key" in lowered or "authentication" in lowered or "401" in error_msg:
             return """❌ **API Key Error**
 
-Your Groq API key is missing or invalid. Please check your `.env` file to ensure the `GROQ_API_KEY` is set correctly. """
+Your Groq API key is missing or invalid. Please check your `.env` file to ensure the `GROQ_API_KEY` is set correctly."""
+
+        if "model_not_found" in lowered or "does not exist" in lowered:
+            return f"""❌ **Model Unavailable**
+
+The configured Groq model (`{GROQ_MODEL}`) is no longer available on this API key.
+Set the `GROQ_MODEL` environment variable to a current model from https://console.groq.com/docs/models."""
+
+        if "rate limit" in lowered or "429" in error_msg:
+            return "⏳ **Rate limit reached.** The guidance service is busy - please try again in a moment."
+
+        return f"❌ **Guidance is unavailable right now.** ({error_msg[:200]})"

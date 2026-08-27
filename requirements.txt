@@ -1,3 +1,7 @@
+# Frontend (Streamlit UI)
+streamlit
+requests
+
 # Backend API
 fastapi
 uvicorn[standard]
